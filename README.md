@@ -68,6 +68,10 @@ The audio files from the ESC50 dataset are loaded and processed to extract their
 # Press the Start training button
 Once the button is pressed, the training process will start. The values of Accuracy and Loss will be displayed dynamically on the graphs, updating in real-time during the execution of each epoch. This allows the user to visually monitor the performance of the model as it trains.
 
+# Press the Stop training button
+When the “Stop Training” button is clicked, the system stop the training process and closes the application. Specifically, the stop command does not take effect immediately: the current epoch is allowed to finish before the process is terminated. Once the epoch completes, the application automatically closes the GUI.
+
+
 # CNN Model
 The basic CNN model used for the example training:
 ```
