@@ -3,20 +3,25 @@ import sys
 import threading
 from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QLineEdit,
-    QFileDialog, QTextEdit, QVBoxLayout, QHBoxLayout, QFormLayout
+    QFileDialog, QTextEdit, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QGridLayout,
+    QComboBox
 )
 from PySide6.QtCore import Qt, Signal
+
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from train import SoundCNN, train_epoch, validate
+from train import train_epoch, validate
 from ESC50Dataset import prepare_esc50_loaders
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import torch.nn as nn
 import torch.optim as optim
+
+
+from models import SoundCNN, ResNet18
 
 # Dummy training logic to simulate AI training
 import time
@@ -30,6 +35,8 @@ def run_train(gui_ref):
         lr = float(gui_ref.learning_rate_input.text())
         batch_size = int(gui_ref.batch_size_input.text())
         epochs = int(gui_ref.epochs_input.text())
+        optimizer_name = gui_ref.optimizer_combo.currentText()
+        dropout = float(gui_ref.dropout.text())
     except ValueError:
         gui_ref.log("Invalid hyperparameters.")
         return
@@ -38,9 +45,19 @@ def run_train(gui_ref):
         gui_ref.log("Dataset or meta file not loaded.")
         return
 
-    model = SoundCNN().to(device)
+    model = SoundCNN(dropout).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    # Optimizer
+    if optimizer_name == 'AdamW':
+        optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    elif optimizer_name == "SGD":
+        optimizer = optim.SGD(model.parameters(), lr=lr)
+    elif optimizer_name == "Adam":
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+    else:
+        print("Error, strategy not available")
+
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
 
     # Ottieni i DataLoader dalla GUI
     train_loader = gui_ref.train_loader
@@ -52,8 +69,10 @@ def run_train(gui_ref):
         return
 
     
-    gui_ref.losses.clear()
-    gui_ref.accuracies.clear()
+    gui_ref.train_losses.clear()
+    gui_ref.train_accuracies.clear()
+    gui_ref.vall_losses.clear()
+    gui_ref.vall_accuracies.clear()
 
 
     best_val_acc = 0.0
@@ -62,7 +81,7 @@ def run_train(gui_ref):
         if gui_ref.stop_requested:
             gui_ref.log(f"Training stopped at epoch {epoch+1}.")
             break
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device, epoch, epochs)
+        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch, epochs)
         val_loss, val_acc = validate(model, val_loader, criterion, device)
 
         gui_ref.log(f"Epoch {epoch+1}/{epochs}")
@@ -70,7 +89,7 @@ def run_train(gui_ref):
         gui_ref.log(f"  Val Loss:   {val_loss:.4f}, Accuracy: {val_acc:.2f}%")
 
         # Update plot
-        gui_ref.update_signal.emit(epoch + 1, train_loss, train_acc)
+        gui_ref.update_signal.emit(epoch + 1, train_loss, train_acc, val_loss, val_acc)
 
         # if save_best_path and val_acc > best_val_acc:
         #     best_val_acc = val_acc
@@ -89,7 +108,7 @@ def run_train(gui_ref):
 
 class TrainingGUI(QWidget):
 
-    update_signal = Signal(int, float, float)  # epoch, loss, acc
+    update_signal = Signal(int, float, float, float, float)  # epoch, loss, acc
 
     def __init__(self):
         super().__init__()
@@ -116,30 +135,49 @@ class TrainingGUI(QWidget):
         layout = QVBoxLayout()
 
         # Hyperparameters input section
-        form_layout = QFormLayout()
+        hyper_params_group = QGroupBox("Hyper Parameters")
+        grid_layout = QGridLayout()
+
         self.learning_rate_input = QLineEdit("0.001")
         self.batch_size_input = QLineEdit("32")
         self.epochs_input = QLineEdit("10")
-        form_layout.addRow("Learning Rate:", self.learning_rate_input)
-        form_layout.addRow("Batch Size:", self.batch_size_input)
-        form_layout.addRow("Epochs:", self.epochs_input)
+        self.dropout = QLineEdit("0.5")
+        self.optimizer_combo = QComboBox()
+        self.optimizer_combo.addItems(["AdamW", "SGD", "Adam"])
+
+        # Aggiungi etichette e campi sulla griglia (2 colonne)
+        grid_layout.addWidget(QLabel("Learning Rate:"), 0, 0)
+        grid_layout.addWidget(self.learning_rate_input, 0, 1)
+
+        grid_layout.addWidget(QLabel("Batch Size:"), 1, 0)
+        grid_layout.addWidget(self.batch_size_input, 1, 1)
+
+        grid_layout.addWidget(QLabel("Optimizer:"), 2, 0)
+        grid_layout.addWidget(self.optimizer_combo, 2, 1)
+
+        grid_layout.addWidget(QLabel("Epochs:"), 0, 2)
+        grid_layout.addWidget(self.epochs_input, 0, 3)
+
+        grid_layout.addWidget(QLabel("Droput"), 1, 2)
+        grid_layout.addWidget(self.dropout, 1, 3)
+
+        hyper_params_group.setLayout(grid_layout)
+        layout.addWidget(hyper_params_group)
 
         # Command buttons
-        button_layout = QHBoxLayout()
-        self.load_dataset_btn = QPushButton("Load Dataset")
         #self.save_dataset_btn = QPushButton("Save Dataset")
         #self.load_params_btn = QPushButton("Load Network Params")
         #self.save_params_btn = QPushButton("Save Network Params")
 
+        self.load_dataset_btn = QPushButton("Load Dataset")
         self.start_btn = QPushButton("Start Training")
         self.stop_btn = QPushButton("Stop Training")
 
-        button_layout.addWidget(self.load_dataset_btn)
+        
         #button_layout.addWidget(self.save_dataset_btn)
         #button_layout.addWidget(self.load_params_btn)
         #button_layout.addWidget(self.save_params_btn)
-        button_layout.addWidget(self.start_btn)
-        button_layout.addWidget(self.stop_btn)
+
 
         # Training evolution display
         self.figure = Figure()
@@ -147,8 +185,10 @@ class TrainingGUI(QWidget):
         self.ax_loss = self.figure.add_subplot(211)  # primo grafico sopra
         self.ax_accuracy = self.figure.add_subplot(212)  # secondo grafico sotto
 
-        self.losses = []
-        self.accuracies = []
+        self.train_losses = []
+        self.train_accuracies = []
+        self.vall_losses = []
+        self.vall_accuracies = []
 
         # Log output
         self.log_output = QTextEdit()
@@ -162,12 +202,26 @@ class TrainingGUI(QWidget):
         self.start_btn.clicked.connect(self.start_training)
         self.stop_btn.clicked.connect(self.stop_training)
 
+
+        # Dataset buttons layout
+        dataset_button_layout = QHBoxLayout()
+        dataset_button_layout.addWidget(self.load_dataset_btn)
+        dataset_button_layout.addStretch(1)
+
+        # Control buttons layout
+        # Layout for training control buttons aligned bottom-right
+        control_button_layout = QHBoxLayout()
+        control_button_layout.addStretch(1)
+        control_button_layout.addWidget(self.start_btn)
+        control_button_layout.addWidget(self.stop_btn)
+
         # Assemble the layout
-        layout.addLayout(form_layout)
-        layout.addLayout(button_layout)
+        #layout.addLayout(form_layout)
+        layout.addLayout(dataset_button_layout)
         layout.addWidget(self.canvas)
         layout.addWidget(QLabel("Console Log:"))
         layout.addWidget(self.log_output)
+        layout.addLayout(control_button_layout)
 
         self.setLayout(layout)
 
@@ -255,15 +309,18 @@ class TrainingGUI(QWidget):
         QApplication.quit()
         sys.exit(0)
 
-    def update_plot(self, epoch, loss, accuracy):
-        self.losses.append(loss)
-        self.accuracies.append(accuracy)
+    def update_plot(self, epoch, train_loss, train_acc, vall_loss, vall_acc):
+        self.train_losses.append(train_loss)
+        self.train_accuracies.append(train_acc)
+        self.vall_losses.append(vall_loss)
+        self.vall_accuracies.append(vall_acc)
 
         # Aggiorna grafico loss
         self.ax_loss.cla()
         self.ax_loss.set_xlabel("Epoch")
         self.ax_loss.set_ylabel("Loss")
-        self.ax_loss.plot(range(1, len(self.losses) + 1), self.losses, label='Loss', color='red')
+        self.ax_loss.plot(range(1, len(self.train_losses) + 1), self.train_losses, label='Train Loss', color='red')
+        self.ax_loss.plot(range(1, len(self.vall_losses) + 1), self.vall_losses, label='Validation Loss', color='blue')
         self.ax_loss.legend()
 
         # Aggiorna grafico accuracy
@@ -271,7 +328,8 @@ class TrainingGUI(QWidget):
         self.ax_accuracy.set_xlabel("Epoch")
         self.ax_accuracy.set_ylabel("Accuracy (%)")
         self.ax_accuracy.set_ylim(0, 100)  # Sempre da 0 a 100
-        self.ax_accuracy.plot(range(1, len(self.accuracies) + 1), self.accuracies, label='Accuracy', color='blue')
+        self.ax_accuracy.plot(range(1, len(self.train_accuracies) + 1), self.train_accuracies, label='Train Accuracy', color='red')
+        self.ax_accuracy.plot(range(1, len(self.vall_accuracies) + 1), self.vall_accuracies, label='Validation Accuracy', color='blue')
         self.ax_accuracy.legend()
 
         self.canvas.draw_idle()
