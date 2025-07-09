@@ -319,6 +319,7 @@ class TrainingGUI(QWidget):
         self.ax_loss.cla()
         self.ax_loss.set_xlabel("Epoch")
         self.ax_loss.set_ylabel("Loss")
+        self.ax_loss.set_xlim(1, self.total_epochs)
         self.ax_loss.plot(range(1, len(self.train_losses) + 1), self.train_losses, label='Train Loss', color='red')
         self.ax_loss.plot(range(1, len(self.vall_losses) + 1), self.vall_losses, label='Validation Loss', color='blue')
         self.ax_loss.legend()

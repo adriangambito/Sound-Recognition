@@ -18,14 +18,14 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, device, epoch, t
         loss.backward()
         optimizer.step()
 
-        running_loss += loss.item()
+        running_loss += loss.item() * labels.size(0)
         _, predicted = torch.max(outputs, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
 
     scheduler.step()
 
-    avg_loss = running_loss / len(loader)
+    avg_loss = running_loss / total
     accuracy = 100 * correct / total
     return avg_loss, accuracy
 
@@ -44,12 +44,12 @@ def validate(model, loader, criterion, device):
             outputs = model(inputs)
             loss = criterion(outputs, labels)
 
-            running_loss += loss.item()
+            running_loss += loss.item() * labels.size(0)
             _, predicted = torch.max(outputs, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    avg_loss = running_loss / len(loader)
+    avg_loss = running_loss / total
     accuracy = 100 * correct / total
     return avg_loss, accuracy
 

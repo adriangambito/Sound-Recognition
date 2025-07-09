@@ -27,21 +27,32 @@ import torch.nn.functional as F
 #         return x
 
 
+import torch.nn as nn
+
 class SoundCNN(nn.Module):
-    """CNN Model for ESC50 Dataset with 3 Conv layers and Dropout, input 128x128."""
+    """CNN Model for ESC50 Dataset with 3 Conv layers, BatchNorm, and Dropout after each block."""
     def __init__(self, dropout: float):
         super(SoundCNN, self).__init__()
         self.conv = nn.Sequential(
+            # Block 1
             nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),  # 128x128
+            nn.BatchNorm2d(32),
             nn.ReLU(),
+            nn.Dropout2d(dropout),
             nn.MaxPool2d(2),  # 64x64
-            
+
+            # Block 2
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # 64x64
+            nn.BatchNorm2d(64),
             nn.ReLU(),
+            nn.Dropout2d(dropout),
             nn.MaxPool2d(2),  # 32x32
 
+            # Block 3
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # 32x32
+            nn.BatchNorm2d(128),
             nn.ReLU(),
+            nn.Dropout2d(dropout),
             nn.MaxPool2d(2),  # 16x16
         )
 
