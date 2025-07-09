@@ -89,7 +89,7 @@ def run_train(gui_ref):
         gui_ref.log(f"  Val Loss:   {val_loss:.4f}, Accuracy: {val_acc:.2f}%")
 
         # Update plot
-        gui_ref.update_signal.emit(epoch + 1, train_loss, train_acc, val_loss, val_acc)
+        gui_ref.update_signal.emit(epoch + 1, epochs, train_loss, train_acc, val_loss, val_acc)
 
         # if save_best_path and val_acc > best_val_acc:
         #     best_val_acc = val_acc
@@ -108,7 +108,7 @@ def run_train(gui_ref):
 
 class TrainingGUI(QWidget):
 
-    update_signal = Signal(int, float, float, float, float)  # epoch, loss, acc
+    update_signal = Signal(int, int, float, float, float, float)  # epoch, loss, acc
 
     def __init__(self):
         super().__init__()
@@ -289,8 +289,10 @@ class TrainingGUI(QWidget):
 
         self.ax_loss.set_xlabel("Epoch")
         self.ax_loss.set_ylabel("Loss")
+        #self.ax_loss.set_xlim(1, 30)
         self.ax_accuracy.set_xlabel("Epoch")
         self.ax_accuracy.set_ylabel("Accuracy (%)")
+        #self.ax_accuracy.set_xlim(1, 30)
         self.ax_accuracy.set_ylim(0, 100)  # Fissa la scala da 0 a 100
 
 
@@ -307,9 +309,9 @@ class TrainingGUI(QWidget):
             self.log("Training stopped.")
 
         QApplication.quit()
-        sys.exit(0)
+        #sys.exit(0)
 
-    def update_plot(self, epoch, train_loss, train_acc, vall_loss, vall_acc):
+    def update_plot(self, epoch, max_epochs, train_loss, train_acc, vall_loss, vall_acc):
         self.train_losses.append(train_loss)
         self.train_accuracies.append(train_acc)
         self.vall_losses.append(vall_loss)
@@ -319,7 +321,7 @@ class TrainingGUI(QWidget):
         self.ax_loss.cla()
         self.ax_loss.set_xlabel("Epoch")
         self.ax_loss.set_ylabel("Loss")
-        self.ax_loss.set_xlim(1, self.total_epochs)
+        self.ax_loss.set_xlim(1, max_epochs)
         self.ax_loss.plot(range(1, len(self.train_losses) + 1), self.train_losses, label='Train Loss', color='red')
         self.ax_loss.plot(range(1, len(self.vall_losses) + 1), self.vall_losses, label='Validation Loss', color='blue')
         self.ax_loss.legend()
@@ -328,6 +330,7 @@ class TrainingGUI(QWidget):
         self.ax_accuracy.cla()
         self.ax_accuracy.set_xlabel("Epoch")
         self.ax_accuracy.set_ylabel("Accuracy (%)")
+        self.ax_accuracy.set_xlim(1, max_epochs)
         self.ax_accuracy.set_ylim(0, 100)  # Sempre da 0 a 100
         self.ax_accuracy.plot(range(1, len(self.train_accuracies) + 1), self.train_accuracies, label='Train Accuracy', color='red')
         self.ax_accuracy.plot(range(1, len(self.vall_accuracies) + 1), self.vall_accuracies, label='Validation Accuracy', color='blue')
