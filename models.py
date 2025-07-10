@@ -74,8 +74,58 @@ class SoundCNN(nn.Module):
         return x
     
 
+import math
 
+class SoundCNN_Variable(nn.Module):
+    def __init__(self, input_size: int, kernel_size: int, stride: int, dropout: float, n_blocks: int):
+        super(SoundCNN_Variable, self).__init__()
 
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.dropout = dropout
+        self.padding = kernel_size // 2
+        self.n_blocks = n_blocks
+
+        in_channels = 1
+        conv_blocks = []
+        size = input_size
+
+        for i in range(n_blocks):
+            out_channels = 32 * (2 ** i)  # Es: 32, 64, 128, 256, ...
+            conv_blocks += [
+                nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=self.padding),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+                nn.Dropout2d(dropout),
+                nn.MaxPool2d(2)
+            ]
+            # Update size after conv and pooling
+            size = self._conv_output_size(size)
+            in_channels = out_channels
+
+        self.conv = nn.Sequential(*conv_blocks)
+
+        self.flatten_dim = out_channels * size * size  # out_channels aggiornato nell'ultimo blocco
+
+        self.fc = nn.Sequential(
+            nn.Linear(self.flatten_dim, 128),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(128, 50)
+        )
+
+    def _conv_output_size(self, size):
+        # Calcolo dopo Conv2D con padding 'same'
+        size = math.floor((size + 2 * self.padding - self.kernel_size) / self.stride + 1)
+        size = size // 2  # MaxPool2d(2)
+        return size
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = x.view(x.size(0), -1)  # Flatten
+        x = self.fc(x)
+        return x
+    
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

@@ -21,7 +21,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 
-from models import SoundCNN, ResNet18
+from models import SoundCNN, ResNet18, SoundCNN_Variable
 
 # Dummy training logic to simulate AI training
 import time
@@ -37,6 +37,10 @@ def run_train(gui_ref):
         epochs = int(gui_ref.epochs_input.text())
         optimizer_name = gui_ref.optimizer_combo.currentText()
         dropout = float(gui_ref.dropout.text())
+        input_size = int(gui_ref.input_size.text())
+        kernel_size = int(gui_ref.kernel_size.text())
+        stride = int(gui_ref.stride.text())
+        n_blocks = int(gui_ref.n_blocks.text())
     except ValueError:
         gui_ref.log("Invalid hyperparameters.")
         return
@@ -45,7 +49,8 @@ def run_train(gui_ref):
         gui_ref.log("Dataset or meta file not loaded.")
         return
 
-    model = SoundCNN(dropout).to(device)
+    #model = SoundCNN(dropout).to(device)
+    model = SoundCNN_Variable(input_size=input_size, kernel_size=kernel_size, stride=stride, dropout=dropout, n_blocks=n_blocks).to(device)
     criterion = nn.CrossEntropyLoss()
     # Optimizer
     if optimizer_name == 'AdamW':
@@ -140,10 +145,14 @@ class TrainingGUI(QWidget):
 
         self.learning_rate_input = QLineEdit("0.001")
         self.batch_size_input = QLineEdit("32")
-        self.epochs_input = QLineEdit("10")
-        self.dropout = QLineEdit("0.5")
+        self.epochs_input = QLineEdit("30")
+        self.dropout = QLineEdit("0.2")
         self.optimizer_combo = QComboBox()
         self.optimizer_combo.addItems(["AdamW", "SGD", "Adam"])
+        self.input_size = QLineEdit("128")  # Dimensione input per CNN
+        self.kernel_size = QLineEdit("5")  # Dimensione del kernel
+        self.stride = QLineEdit("1")  # Stride per la convoluzione
+        self.n_blocks = QLineEdit("3")  # Numero di blocchi per la CNN
 
         # Aggiungi etichette e campi sulla griglia (2 colonne)
         grid_layout.addWidget(QLabel("Learning Rate:"), 0, 0)
@@ -153,13 +162,25 @@ class TrainingGUI(QWidget):
         grid_layout.addWidget(self.batch_size_input, 1, 1)
 
         grid_layout.addWidget(QLabel("Optimizer:"), 2, 0)
-        grid_layout.addWidget(self.optimizer_combo, 2, 1)
+        grid_layout.addWidget(self.optimizer_combo, 2,1)
 
-        grid_layout.addWidget(QLabel("Epochs:"), 0, 2)
-        grid_layout.addWidget(self.epochs_input, 0, 3)
+        grid_layout.addWidget(QLabel("Epochs:"), 3, 0)
+        grid_layout.addWidget(self.epochs_input, 3, 1)
 
-        grid_layout.addWidget(QLabel("Droput"), 1, 2)
-        grid_layout.addWidget(self.dropout, 1, 3)
+        grid_layout.addWidget(QLabel("Droput"), 4, 0)
+        grid_layout.addWidget(self.dropout, 4, 1)
+
+        grid_layout.addWidget(QLabel("Input Size:"), 0, 2)
+        grid_layout.addWidget(self.input_size, 0, 3)
+
+        grid_layout.addWidget(QLabel("Kernel Size:"), 1, 2)
+        grid_layout.addWidget(self.kernel_size, 1, 3)
+
+        grid_layout.addWidget(QLabel("Stride:"), 2, 2)
+        grid_layout.addWidget(self.stride, 2, 3)
+
+        grid_layout.addWidget(QLabel("Number of Blocks:"), 3, 2)
+        grid_layout.addWidget(self.n_blocks, 3, 3)
 
         hyper_params_group.setLayout(grid_layout)
         layout.addWidget(hyper_params_group)
