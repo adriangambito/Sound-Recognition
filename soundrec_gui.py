@@ -1,3 +1,4 @@
+import datetime
 import os
 import sys
 import threading
@@ -13,7 +14,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from train import train_epoch, validate
+from train import train_epoch, validate, validate
 from ESC50Dataset import prepare_esc50_loaders
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -45,12 +46,48 @@ def run_train(gui_ref):
         gui_ref.log("Invalid hyperparameters.")
         return
     
-    if not gui_ref.dataset_dir or not gui_ref.meta_file:
-        gui_ref.log("Dataset or meta file not loaded.")
-        return
+    # if not gui_ref.dataset_dir or not gui_ref.meta_file:
+    #     gui_ref.log("Dataset or meta file not loaded.")
+    #     return
 
     #model = SoundCNN(dropout).to(device)
-    model = SoundCNN_Variable(input_size=input_size, kernel_size=kernel_size, stride=stride, dropout=dropout, n_blocks=n_blocks).to(device)
+    if gui_ref._loaded_model == True:
+        selected_model = gui_ref.model_selector.currentText()
+        gui_ref.log(f"Selected model: {selected_model}")
+        checkpoint_path = os.path.join("Checkpoints", selected_model)
+        if not os.path.exists(checkpoint_path):
+            gui_ref.log(f"Selected checkpoint {selected_model} not found.")
+            return
+        
+        
+        # Esempio di utilizzo:
+        #gui_ref.inspect_checkpoint(checkpoint_path)
+        # Carica gli hyper-parameters salvati accanto al modello
+        try:
+            hyperparams = gui_ref.parse_hyperparams_from_filename(checkpoint_path)
+            checkpoint = torch.load(checkpoint_path)
+           
+            #gui_ref.log(f"Checkpoint: {checkpoint}")
+        except Exception as e:
+            gui_ref.log(f"Error: {str(e)}")
+            return
+        
+
+        # Inizializza il modello con i parametri recuperati dal disco
+        model = SoundCNN_Variable(
+            input_size=hyperparams["input_size"],
+            kernel_size=hyperparams["kernel_size"],
+            stride=hyperparams["stride"],
+            dropout=hyperparams["dropout"],
+            n_blocks=hyperparams["n_blocks"]
+        ).to(device)
+
+        # Carica i pesi
+        model.load_state_dict(checkpoint)
+        gui_ref.log(f"✅ Loaded model and hyper-parameters from {checkpoint_path}")
+    else:
+        model = SoundCNN_Variable(input_size=input_size, kernel_size=kernel_size, stride=stride, dropout=dropout, n_blocks=n_blocks).to(device)
+    
     criterion = nn.CrossEntropyLoss()
     # Optimizer
     if optimizer_name == 'AdamW':
@@ -101,6 +138,8 @@ def run_train(gui_ref):
         #     torch.save(model.state_dict(), save_best_path)
         #     gui_ref.log(f"Saved best model with val accuracy {val_acc:.2f}%")
 
+    gui_ref._trained_model = model
+    gui_ref.check_save_model = True
     gui_ref.log("Training completed.")
 
     # Valutazione finale sul test set
@@ -130,16 +169,21 @@ class TrainingGUI(QWidget):
         self.test_loader = None
 
         self.stop_requested = False
+        self.check_save_model = False
+        self._trained_model = None
+        self._loaded_model = False
 
         self.init_ui()
         self.update_signal.connect(self.update_plot)
 
     
     
+
+
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Hyperparameters input section
+        # ------------------------- Hyper Parameters -------------------------
         hyper_params_group = QGroupBox("Hyper Parameters")
         grid_layout = QGridLayout()
 
@@ -149,102 +193,116 @@ class TrainingGUI(QWidget):
         self.dropout = QLineEdit("0.2")
         self.optimizer_combo = QComboBox()
         self.optimizer_combo.addItems(["AdamW", "SGD", "Adam"])
-        self.input_size = QLineEdit("128")  # Dimensione input per CNN
-        self.kernel_size = QLineEdit("5")  # Dimensione del kernel
-        self.stride = QLineEdit("1")  # Stride per la convoluzione
-        self.n_blocks = QLineEdit("3")  # Numero di blocchi per la CNN
+        self.input_size = QLineEdit("128")
+        self.kernel_size = QLineEdit("5")
+        self.stride = QLineEdit("1")
+        self.n_blocks = QLineEdit("3")
 
-        # Aggiungi etichette e campi sulla griglia (2 colonne)
         grid_layout.addWidget(QLabel("Learning Rate:"), 0, 0)
         grid_layout.addWidget(self.learning_rate_input, 0, 1)
-
         grid_layout.addWidget(QLabel("Batch Size:"), 1, 0)
         grid_layout.addWidget(self.batch_size_input, 1, 1)
-
         grid_layout.addWidget(QLabel("Optimizer:"), 2, 0)
-        grid_layout.addWidget(self.optimizer_combo, 2,1)
-
+        grid_layout.addWidget(self.optimizer_combo, 2, 1)
         grid_layout.addWidget(QLabel("Epochs:"), 3, 0)
         grid_layout.addWidget(self.epochs_input, 3, 1)
-
-        grid_layout.addWidget(QLabel("Droput"), 4, 0)
+        grid_layout.addWidget(QLabel("Dropout:"), 4, 0)
         grid_layout.addWidget(self.dropout, 4, 1)
 
         grid_layout.addWidget(QLabel("Input Size:"), 0, 2)
         grid_layout.addWidget(self.input_size, 0, 3)
-
         grid_layout.addWidget(QLabel("Kernel Size:"), 1, 2)
         grid_layout.addWidget(self.kernel_size, 1, 3)
-
         grid_layout.addWidget(QLabel("Stride:"), 2, 2)
         grid_layout.addWidget(self.stride, 2, 3)
-
         grid_layout.addWidget(QLabel("Number of Blocks:"), 3, 2)
         grid_layout.addWidget(self.n_blocks, 3, 3)
 
         hyper_params_group.setLayout(grid_layout)
         layout.addWidget(hyper_params_group)
 
-        # Command buttons
-        #self.save_dataset_btn = QPushButton("Save Dataset")
-        #self.load_params_btn = QPushButton("Load Network Params")
-        #self.save_params_btn = QPushButton("Save Network Params")
-
+        # ------------------------- Buttons -------------------------
         self.load_dataset_btn = QPushButton("Load Dataset")
+        self.load_model_btn = QPushButton("Load model")
+        self.save_model_btn = QPushButton("Save model")
+        self.test_model_btn = QPushButton("Test model")
         self.start_btn = QPushButton("Start Training")
         self.stop_btn = QPushButton("Stop Training")
+        self.reset_btn = QPushButton("Reset")
 
-        
-        #button_layout.addWidget(self.save_dataset_btn)
-        #button_layout.addWidget(self.load_params_btn)
-        #button_layout.addWidget(self.save_params_btn)
+        # ------------------------- Model Selector -------------------------
+        self.model_selector = QComboBox()
+        self.populate_model_selector()
 
-
-        # Training evolution display
+        # ------------------------- Plots -------------------------
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
-        self.ax_loss = self.figure.add_subplot(211)  # primo grafico sopra
-        self.ax_accuracy = self.figure.add_subplot(212)  # secondo grafico sotto
+        self.ax_loss = self.figure.add_subplot(211)
+        self.ax_accuracy = self.figure.add_subplot(212)
 
         self.train_losses = []
         self.train_accuracies = []
         self.vall_losses = []
         self.vall_accuracies = []
 
-        # Log output
+        # ------------------------- Log Console -------------------------
         self.log_output = QTextEdit()
         self.log_output.setReadOnly(True)
 
-        # Connect buttons
+        # ------------------------- Connections -------------------------
         self.load_dataset_btn.clicked.connect(self.load_dataset)
-        #self.save_dataset_btn.clicked.connect(self.save_dataset)
-        #self.load_params_btn.clicked.connect(self.load_params)
-        #self.save_params_btn.clicked.connect(self.save_params)
+        self.load_model_btn.clicked.connect(self.load_model)
+        self.save_model_btn.clicked.connect(self.save_model)
+        self.test_model_btn.clicked.connect(self.test_model)
         self.start_btn.clicked.connect(self.start_training)
         self.stop_btn.clicked.connect(self.stop_training)
+        self.reset_btn.clicked.connect(self.reset)
 
+        # ------------------------- Layout Assembly -------------------------
 
-        # Dataset buttons layout
+        # Dataset buttons
         dataset_button_layout = QHBoxLayout()
         dataset_button_layout.addWidget(self.load_dataset_btn)
         dataset_button_layout.addStretch(1)
 
-        # Control buttons layout
-        # Layout for training control buttons aligned bottom-right
+        # Model buttons + dropdown
+        model_button_layout = QHBoxLayout()
+        model_button_layout.addWidget(self.load_model_btn)
+        model_button_layout.addWidget(self.save_model_btn)
+        model_button_layout.addWidget(self.model_selector)
+        model_button_layout.addWidget(self.reset_btn)
+        model_button_layout.addStretch(1)
+
+        # Control buttons
         control_button_layout = QHBoxLayout()
         control_button_layout.addStretch(1)
+        control_button_layout.addWidget(self.test_model_btn)
         control_button_layout.addWidget(self.start_btn)
         control_button_layout.addWidget(self.stop_btn)
 
-        # Assemble the layout
-        #layout.addLayout(form_layout)
+        # Assemble
         layout.addLayout(dataset_button_layout)
+        layout.addLayout(model_button_layout)
         layout.addWidget(self.canvas)
         layout.addWidget(QLabel("Console Log:"))
         layout.addWidget(self.log_output)
         layout.addLayout(control_button_layout)
 
         self.setLayout(layout)
+
+    # ------------------------- Populate Model Selector -------------------------
+    def populate_model_selector(self):
+        self.model_selector.clear()
+        checkpoints_dir = "Checkpoints"
+
+        if not os.path.exists(checkpoints_dir):
+            os.makedirs(checkpoints_dir)
+
+        files = [f for f in os.listdir(checkpoints_dir) if os.path.isfile(os.path.join(checkpoints_dir, f))]
+        if files:
+            self.model_selector.addItems(files)
+        else:
+            self.model_selector.addItem("No checkpoints found")
 
 
 
@@ -283,20 +341,160 @@ class TrainingGUI(QWidget):
 
             
 
-    # def save_dataset(self):
-    #     file_name, _ = QFileDialog.getSaveFileName(self, "Save Dataset")
-    #     if file_name:
-    #         self.log(f"Dataset saved to: {file_name}")
+    def load_model(self):
+        self._loaded_model = True
+        self.log(f"Status: self._loaded_model -> {self._loaded_model}")
+        # file_name, _ = QFileDialog.getSaveFileName(self, "Save Dataset")
+        # if file_name:
+        #     self.log(f"Dataset saved to: {file_name}")
 
     # def load_params(self):
     #     file_name, _ = QFileDialog.getOpenFileName(self, "Open Network Parameters")
     #     if file_name:
     #         self.log(f"Network parameters loaded from: {file_name}")
 
-    # def save_params(self):
-    #     file_name, _ = QFileDialog.getSaveFileName(self, "Save Network Parameters")
-    #     if file_name:
-    #         self.log(f"Network parameters saved to: {file_name}")
+    def save_model(self):
+        if self.check_save_model == True:
+            self.save_checkpoint()
+            self.log("Model saved")
+        else:
+            self.log("There isn't a model to save")
+
+
+    
+    def test_model(self):
+        if self._loaded_model == True:
+            selected_model = self.model_selector.currentText()
+            self.log(f"Selected model: {selected_model}")
+            checkpoint_path = os.path.join("Checkpoints", selected_model)
+            if not os.path.exists(checkpoint_path):
+                self.log(f"Selected checkpoint {selected_model} not found.")
+                return
+            
+            try:
+                hyperparams = self.parse_hyperparams_from_filename(checkpoint_path)
+                checkpoint = torch.load(checkpoint_path)
+            
+                #gui_ref.log(f"Checkpoint: {checkpoint}")
+            except Exception as e:
+                self.log(f"Error: {str(e)}")
+                return
+
+            # Inizializza il modello con i parametri recuperati dal disco
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            model = SoundCNN_Variable(
+                input_size=hyperparams["input_size"],
+                kernel_size=hyperparams["kernel_size"],
+                stride=hyperparams["stride"],
+                dropout=hyperparams["dropout"],
+                n_blocks=hyperparams["n_blocks"]
+            ).to(device)
+
+            # Carica i pesi
+            model.load_state_dict(checkpoint)
+            self.log(f"✅ Loaded model and hyper-parameters from {checkpoint_path}")
+
+            if self.test_loader is None:
+                self.log("DataLoaders not initialized. Please load the dataset first.")
+                return
+            
+            criterion = nn.CrossEntropyLoss()
+
+            self.log("Starting evaluation model...")
+            
+            test_loss, test_acc = validate(model, self.test_loader, criterion, device)
+            self.log(f"Test Loss: {test_loss:.4f}, Accuracy: {test_acc:.2f}%")
+
+        else:
+            self.log(f"The model is not loaded.")
+
+
+    
+    def generate_checkpoint_filename(self):
+        # Costruisci il nome base
+        filename = (
+            f"CNN_{self.learning_rate_input.text()}_{self.batch_size_input.text()}_{self.optimizer_combo.currentText()}_"
+            f"{self.epochs_input.text()}_{self.dropout.text()}_{self.input_size.text()}_"
+            f"{self.kernel_size.text()}_{self.stride.text()}_{self.n_blocks.text()}.pt"
+        )
+
+        checkpoints_dir = "Checkpoints"
+        if not os.path.exists(checkpoints_dir):
+            os.makedirs(checkpoints_dir)
+
+        filepath = os.path.join(checkpoints_dir, filename)
+
+        # Se il file esiste già, aggiungi timestamp
+        if os.path.exists(filepath):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = filename.replace(".pt", f"_{timestamp}.pt")
+            filepath = os.path.join(checkpoints_dir, filename)
+
+        return filepath
+    
+
+    def inspect_checkpoint(self, checkpoint_path):
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(checkpoint, dict):
+                self.log("✅ Checkpoint loaded successfully.")
+
+                has_model_state = "model_state_dict" in checkpoint
+                has_hyperparams = "hyperparameters" in checkpoint
+
+                self.log(f"- Contains 'model_state_dict': {has_model_state}")
+                self.log(f"- Contains 'hyperparameters': {has_hyperparams}")
+
+                if has_hyperparams:
+                    self.log("Hyperparameters contained:")
+                    for k, v in checkpoint["hyperparameters"].items():
+                        self.log(f"  {k}: {v}")
+
+            else:
+                self.log("❌ Checkpoint is not a dictionary. It might be a raw state_dict or model object.")
+
+        except Exception as e:
+            self.log(f"❌ Error loading checkpoint: {e}")
+
+
+    def parse_hyperparams_from_filename(self, filename):
+        """
+        Estrae gli hyperparameters dal nome del file checkpoint.
+
+        Assumiamo che il formato sia:
+        CNN_<lr>_<batch_size>_<optimizer>_<epochs>_<dropout>_<input_size>_<kernel_size>_<stride>_<n_blocks>.pt
+        """
+        basename = os.path.basename(filename)
+        name, _ = os.path.splitext(basename)
+        parts = name.split("_")
+        
+        if len(parts) != 10 or parts[0] != "CNN":
+            raise ValueError(f"Invalid checkpoint filename format: {filename}")
+        
+        hyperparams = {
+            "learning_rate": float(parts[1]),
+            "batch_size": int(parts[2]),
+            "optimizer": parts[3],
+            "epochs": int(parts[4]),
+            "dropout": float(parts[5]),
+            "input_size": int(parts[6]),
+            "kernel_size": int(parts[7]),
+            "stride": int(parts[8]),
+            "n_blocks": int(parts[9])
+        }
+        return hyperparams
+
+    
+
+
+    def save_checkpoint(self):
+        filepath = self.generate_checkpoint_filename()
+        self.log(f"Model checkpoint name: {filepath}")
+        torch.save(self._trained_model.state_dict(), filepath)
+        
+        print(f"Modello salvato in {filepath}")
+
 
     def start_training(self):
         if self.training_thread and self.training_thread.is_alive():
@@ -361,6 +559,14 @@ class TrainingGUI(QWidget):
 
     def log(self, message):
         self.log_output.append(message)
+
+
+    def reset(self):
+        self.log("All settings are restored.")
+        self.check_save_model = False
+        self._trained_model = None
+        self._loaded_model = False
+        self.stop_requested = False
 
 
 if __name__ == "__main__":

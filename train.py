@@ -1,3 +1,6 @@
+import os
+import json
+
 import torch
 from tqdm import tqdm
 
@@ -54,4 +57,17 @@ def validate(model, loader, criterion, device):
     return avg_loss, accuracy
 
 # TODO: test function
+
+
+
+
+def load_hyperparams_from_checkpoint(checkpoint_path):
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Hyperparameters model.pt not found: {checkpoint_path}")
+
+    json_path = checkpoint_path.replace(".pt", ".json")
+    with open(json_path, "r") as f:
+        hyperparams = json.load(f)
+
+    return hyperparams
 
