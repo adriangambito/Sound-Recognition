@@ -22,7 +22,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 
-from models import SoundCNN, ResNet18, SoundCNN_Variable
+from models import SoundCNN, ResNet18, SoundCNN_Variable, SoundCNN_MFCCConcat
 
 # Dummy training logic to simulate AI training
 import time
@@ -74,20 +74,28 @@ def run_train(gui_ref):
         
 
         # Inizializza il modello con i parametri recuperati dal disco
-        model = SoundCNN_Variable(
+        # model = SoundCNN_Variable(
+        #     input_size=hyperparams["input_size"],
+        #     kernel_size=hyperparams["kernel_size"],
+        #     stride=hyperparams["stride"],
+        #     dropout=hyperparams["dropout"],
+        #     n_blocks=hyperparams["n_blocks"]
+        # ).to(device)
+        model = SoundCNN_MFCCConcat(
             input_size=hyperparams["input_size"],
             kernel_size=hyperparams["kernel_size"],
             stride=hyperparams["stride"],
             dropout=hyperparams["dropout"],
-            n_blocks=hyperparams["n_blocks"]
+            n_blocks=hyperparams["n_blocks"],
+            mfcc_feature_size=2000
         ).to(device)
 
         # Carica i pesi
         model.load_state_dict(checkpoint)
         gui_ref.log(f"✅ Loaded model and hyper-parameters from {checkpoint_path}")
     else:
-        model = SoundCNN_Variable(input_size=input_size, kernel_size=kernel_size, stride=stride, dropout=dropout, n_blocks=n_blocks).to(device)
-    
+        model = SoundCNN_MFCCConcat(input_size=input_size, kernel_size=kernel_size, stride=stride, dropout=dropout, n_blocks=n_blocks, mfcc_feature_size=2000).to(device)
+
     criterion = nn.CrossEntropyLoss()
     # Optimizer
     if optimizer_name == 'AdamW':

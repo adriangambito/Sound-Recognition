@@ -12,11 +12,14 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, device, epoch, t
     correct = 0
     total = 0
 
-    for inputs, labels in tqdm(loader, desc=f'Epoch {epoch+1}/{total_epochs}'):
-        inputs, labels = inputs.to(device), labels.to(device)
+    for mel_inputs, mfcc_inputs, labels  in tqdm(loader, desc=f'Epoch {epoch+1}/{total_epochs}'):
+
+        mel_inputs = mel_inputs.to(device)
+        mfcc_inputs = mfcc_inputs.to(device)
+        labels = labels.to(device)
 
         optimizer.zero_grad()
-        outputs = model(inputs)
+        outputs = model(mel_inputs, mfcc_inputs)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
@@ -34,7 +37,27 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, device, epoch, t
 
 
 
-# Funzione di validazione
+# # Funzione di validazione
+# def validate(model, loader, criterion, device):
+#     model.eval()
+#     running_loss = 0.0
+#     correct = 0
+#     total = 0
+
+#     with torch.no_grad():
+#         for inputs, labels in loader:
+#             inputs, labels = inputs.to(device), labels.to(device)
+#             outputs = model(inputs)
+#             loss = criterion(outputs, labels)
+
+#             running_loss += loss.item() * labels.size(0)
+#             _, predicted = torch.max(outputs, 1)
+#             total += labels.size(0)
+#             correct += (predicted == labels).sum().item()
+
+#     avg_loss = running_loss / total
+#     accuracy = 100 * correct / total
+#     return avg_loss, accuracy
 def validate(model, loader, criterion, device):
     model.eval()
     running_loss = 0.0
@@ -42,9 +65,12 @@ def validate(model, loader, criterion, device):
     total = 0
 
     with torch.no_grad():
-        for inputs, labels in loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            outputs = model(inputs)
+        for mel_inputs, mfcc_inputs, labels in loader:
+            mel_inputs = mel_inputs.to(device)     # shape: [B, 1, 128, 128]
+            mfcc_inputs = mfcc_inputs.to(device)   # shape: [B, 2000] (flattened MFCC)
+            labels = labels.to(device)
+
+            outputs = model(mel_inputs, mfcc_inputs)  # Pass both inputs to the model
             loss = criterion(outputs, labels)
 
             running_loss += loss.item() * labels.size(0)
@@ -55,7 +81,6 @@ def validate(model, loader, criterion, device):
     avg_loss = running_loss / total
     accuracy = 100 * correct / total
     return avg_loss, accuracy
-
 # TODO: test function
 
 

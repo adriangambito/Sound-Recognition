@@ -29,8 +29,22 @@ def prepare_spectrogram(spec, target_shape=TARGET_SIZE):
     """Resize the Mel spectogram to fixed size."""
 
     spec_resized = resize(spec, target_shape, mode='constant', anti_aliasing=True)
+    
     return spec_resized
 
+
+def extract_mfcc(file_path, n_mfcc=40, target_shape=(40, 50)):
+    """Extract and resize MFCC features from a WAV file."""
+    y, sr = librosa.load(file_path, sr=44100)  # fixed 44.1kHz
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc)
+
+    # Resize to fixed size (e.g., 40 x 50)
+    mfcc_resized = resize(mfcc, target_shape, mode='constant', anti_aliasing=True)
+
+    # Normalize (per-sample z-score)
+    mfcc_normalized = (mfcc_resized - mfcc_resized.mean()) / (mfcc_resized.std() + 1e-9)
+
+    return mfcc_normalized  # shape: (40, 50)
 
 
 class ESC50Dataset(Dataset):
@@ -42,28 +56,53 @@ class ESC50Dataset(Dataset):
     def __len__(self):
         return len(self.df)
 
+    # def __getitem__(self, idx):
+    #     row = self.df.iloc[idx]
+    #     file_name = row['filename']
+    #     label_idx = row['target']  # numeric label (0-49)
+
+    #     # Costruisci il path completo al file audio .wav
+    #     audio_path = os.path.join(self.audio_dir, file_name)
+
+    #     # Estrai e preprocessa lo spettrogramma di Mel
+    #     mel_spec = extract_mel_spectrogram(audio_path)
+    #     mel_spec = prepare_spectrogram(mel_spec)
+
+    #     # Normalizzazione (Z-score)
+    #     mel_spec = (mel_spec - np.mean(mel_spec)) / np.std(mel_spec)
+
+    #     # Converti in tensore (shape: [1, 128, 128])
+    #     mel_spec_tensor = torch.tensor(mel_spec, dtype=torch.float32).unsqueeze(0)
+
+    #     if self.transform:
+    #         mel_spec_tensor = self.transform(mel_spec_tensor)
+
+    #     return mel_spec_tensor, label_idx
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         file_name = row['filename']
-        label_idx = row['target']  # numeric label (0-49)
-
-        # Costruisci il path completo al file audio .wav
+        label_idx = row['target']
         audio_path = os.path.join(self.audio_dir, file_name)
 
-        # Estrai e preprocessa lo spettrogramma di Mel
+        # Mel spectrogram
         mel_spec = extract_mel_spectrogram(audio_path)
         mel_spec = prepare_spectrogram(mel_spec)
-
-        # Normalizzazione (Z-score)
         mel_spec = (mel_spec - np.mean(mel_spec)) / np.std(mel_spec)
+        mel_tensor = torch.tensor(mel_spec, dtype=torch.float32).unsqueeze(0)  # [1, 128, 128]
 
-        # Converti in tensore (shape: [1, 128, 128])
-        mel_spec_tensor = torch.tensor(mel_spec, dtype=torch.float32).unsqueeze(0)
+        # MFCC
+        mfcc = extract_mfcc(audio_path, n_mfcc=40, target_shape=(40, 50))
+        mfcc_tensor = torch.tensor(mfcc.flatten(), dtype=torch.float32)  # [2000]
 
-        if self.transform:
-            mel_spec_tensor = self.transform(mel_spec_tensor)
+        return mel_tensor, mfcc_tensor, label_idx
 
-        return mel_spec_tensor, label_idx
+def custom_collate_fn(batch):
+    mel, mfcc, label = zip(*batch)
+    return (
+        torch.stack(mel),
+        torch.stack(mfcc),
+        torch.tensor(label)
+    )
 
 
 
@@ -101,13 +140,13 @@ def prepare_esc50_loaders(audio_dir, meta_file, batch_size):
     val_subset = torch.utils.data.Subset(train_val_dataset, val_idx)
 
     train_loader = DataLoader(
-        train_subset, batch_size=batch_size, shuffle=True, num_workers=4
+        train_subset, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_fn, num_workers=4
     )
     val_loader = DataLoader(
-        val_subset, batch_size=batch_size, shuffle=False, num_workers=4
+        val_subset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn, num_workers=4
     )
     test_loader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=4
+        test_dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn, num_workers=4
     )
 
     # Logga le dimensioni

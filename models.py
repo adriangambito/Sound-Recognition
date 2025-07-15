@@ -222,3 +222,60 @@ def ResNet18(num_classes=50, input_width=128, input_height=128):
         activation=F.silu,
         dropout=0.3  # Tune if needed
     )
+
+
+import torch
+import torch.nn as nn
+import math
+
+class SoundCNN_MFCCConcat(nn.Module):
+    def __init__(self, input_size: int, kernel_size: int, stride: int, dropout: float, n_blocks: int, mfcc_feature_size: int):
+        super(SoundCNN_MFCCConcat, self).__init__()
+
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.dropout = dropout
+        self.padding = kernel_size // 2
+        self.n_blocks = n_blocks
+
+        in_channels = 1
+        conv_blocks = []
+        size = input_size  # starting with 128
+
+        for i in range(n_blocks):
+            out_channels = 32 * (2 ** i)  # 32, 64, 128, ...
+            conv_blocks += [
+                nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=self.padding),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+                nn.Dropout2d(dropout),
+                nn.MaxPool2d(2)
+            ]
+            size = self._conv_output_size(size)
+            in_channels = out_channels
+
+        self.conv = nn.Sequential(*conv_blocks)
+
+        # Flattened size of CNN output
+        self.flatten_dim = out_channels * size * size
+
+        # Combine CNN output + MFCC features
+        self.fc = nn.Sequential(
+            nn.Linear(self.flatten_dim + mfcc_feature_size, 128),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(128, 50)  # ESC-50 has 50 classes
+        )
+
+    def _conv_output_size(self, size):
+        # Output size after Conv2D + MaxPool2D
+        size = math.floor((size + 2 * self.padding - self.kernel_size) / self.stride + 1)
+        size = size // 2  # MaxPool2d(2)
+        return size
+
+    def forward(self, mel_spec, mfcc_features):
+        x = self.conv(mel_spec)
+        x = x.view(x.size(0), -1)  # Flatten CNN output
+        x = torch.cat((x, mfcc_features), dim=1)  # Concatenate MFCCs
+        x = self.fc(x)
+        return x
