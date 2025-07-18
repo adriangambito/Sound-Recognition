@@ -11,11 +11,108 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 import numpy as np
 import librosa
+from librosa.effects import time_stretch
 from skimage.transform import resize
 
 # Parametri spettrogramma
 N_MELS = 128
 TARGET_SIZE = (128, 128)
+
+class ESC50Dataset(Dataset):
+    def __init__(self, audio_dir, meta_file=None, df=None, transform=None):
+        self.audio_dir = audio_dir
+        if df is not None:
+            self.df = df.reset_index(drop=True)
+        elif meta_file is not None:
+            self.df = pd.read_csv(meta_file)
+        else:
+            raise ValueError("Devi fornire almeno meta_file o df.")
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.df)
+
+ 
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        file_name = row['filename']
+        label_idx = row['target']
+        audio_path = os.path.join(self.audio_dir, file_name)
+
+        # Mel spectrogram
+        mel_spec = extract_mel_spectrogram(audio_path)
+        mel_spec = prepare_spectrogram(mel_spec)
+        mel_spec = (mel_spec - np.mean(mel_spec)) / np.std(mel_spec)
+        mel_tensor = torch.tensor(mel_spec, dtype=torch.float32).unsqueeze(0)  # [1, 128, 128]
+
+        # MFCC
+        mfcc = extract_mfcc(audio_path, n_mfcc=40, target_shape=(40, 50))
+        mfcc_tensor = torch.tensor(mfcc.flatten(), dtype=torch.float32)  # [2000]
+
+        return mel_tensor, mfcc_tensor, label_idx
+
+
+
+def add_noise(y, noise_factor=0.005):
+    noise = np.random.randn(len(y))
+    return y + noise_factor * noise
+
+def stretch_time(y, rate=1.1):
+    print("Stretching with rate =", rate)
+    print("Type of librosa.effects.time_stretch:", type(librosa.effects.time_stretch))
+    return librosa.effects.time_stretch(y, rate)
+
+def pitch_shift(y, sr, n_steps=2):
+    return librosa.effects.pitch_shift(y, sr, n_steps)
+
+def random_augment(y, sr):
+    aug_choice = np.random.choice(['noise', 'stretch', 'pitch', 'none'])
+    if aug_choice == 'noise':
+        return add_noise(y)
+    elif aug_choice == 'stretch':
+        rate = np.random.uniform(0.9, 1.1)
+        return stretch_time(y, rate)
+    elif aug_choice == 'pitch':
+        steps = np.random.uniform(-2, 2)
+        return pitch_shift(y, sr, steps)
+    else:
+        return y
+
+
+
+class ESC50DatasetAug(Dataset):
+    def __init__(self, audio_dir, df, augment=False):
+        self.audio_dir = audio_dir
+        self.df = df.reset_index(drop=True)
+        self.augment = augment
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        file_name = row['filename']
+        label_idx = row['target']
+        audio_path = os.path.join(self.audio_dir, file_name)
+
+        y, sr = librosa.load(audio_path, sr=44100)
+
+        if self.augment:
+            y = random_augment(y, sr)
+
+        # Usa extract_mel_spectrogram e prepare_spectrogram
+        mel_spec = extract_mel_spectrogram(audio_path)
+        mel_resized = prepare_spectrogram(mel_spec, target_shape=(128, 128))
+        mel_norm = (mel_resized - mel_resized.mean()) / (mel_resized.std() + 1e-9)
+        mel_tensor = torch.tensor(mel_norm, dtype=torch.float32).unsqueeze(0)
+
+        # Usa extract_mfcc
+        mfcc_norm = extract_mfcc(audio_path, n_mfcc=40, target_shape=(40, 50))
+        mfcc_tensor = torch.tensor(mfcc_norm.flatten(), dtype=torch.float32)
+
+        return mel_tensor, mfcc_tensor, label_idx
+
+
 
 def save_dataloaders(train_loader, val_loader, test_loader, save_dir):
     os.makedirs(save_dir, exist_ok=True)
@@ -90,38 +187,6 @@ def extract_mfcc(file_path, n_mfcc=40, target_shape=(40, 50)):
     return mfcc_normalized  # shape: (40, 50)
 
 
-class ESC50Dataset(Dataset):
-    def __init__(self, audio_dir, meta_file=None, df=None, transform=None):
-        self.audio_dir = audio_dir
-        if df is not None:
-            self.df = df.reset_index(drop=True)
-        elif meta_file is not None:
-            self.df = pd.read_csv(meta_file)
-        else:
-            raise ValueError("Devi fornire almeno meta_file o df.")
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.df)
-
- 
-    def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-        file_name = row['filename']
-        label_idx = row['target']
-        audio_path = os.path.join(self.audio_dir, file_name)
-
-        # Mel spectrogram
-        mel_spec = extract_mel_spectrogram(audio_path)
-        mel_spec = prepare_spectrogram(mel_spec)
-        mel_spec = (mel_spec - np.mean(mel_spec)) / np.std(mel_spec)
-        mel_tensor = torch.tensor(mel_spec, dtype=torch.float32).unsqueeze(0)  # [1, 128, 128]
-
-        # MFCC
-        mfcc = extract_mfcc(audio_path, n_mfcc=40, target_shape=(40, 50))
-        mfcc_tensor = torch.tensor(mfcc.flatten(), dtype=torch.float32)  # [2000]
-
-        return mel_tensor, mfcc_tensor, label_idx
 
 def custom_collate_fn(batch):
     mel, mfcc, label = zip(*batch)
@@ -133,78 +198,157 @@ def custom_collate_fn(batch):
 
 
 
-def prepare_esc50_loaders(audio_dir, meta_file, batch_size):
+def prepare_esc50_loaders(audio_dir, meta_file, batch_size, data_augmentation=False):
 
-    save_dir = Path("Datasets/ESC50/Dataloaders")
-    trainloader_path = Path(f"Datasets/ESC50/Dataloaders/trainloader.pt")
-    valloader_path = Path(f"Datasets/ESC50/Dataloaders/valloader.pt")
-    testloader_path = Path(f"Datasets/ESC50/Dataloaders/testloader.pt")
 
-    if trainloader_path.exists() and valloader_path.exists() and testloader_path.exists():
-        print(f"Dataloaders trovati, uploading da disco...")
+    if data_augmentation == False:
 
-        train_loader, val_loader, test_loader = load_dataloaders_from_disk(save_dir, batch_size)
-        return train_loader, val_loader, test_loader
+        save_dir = Path("Datasets/ESC50/Dataloaders")
+        trainloader_path = Path(f"Datasets/ESC50/Dataloaders/trainloader.pt")
+        valloader_path = Path(f"Datasets/ESC50/Dataloaders/valloader.pt")
+        testloader_path = Path(f"Datasets/ESC50/Dataloaders/testloader.pt")
+
+        if trainloader_path.exists() and valloader_path.exists() and testloader_path.exists():
+            print(f"Dataloaders trovati, uploading da disco...")
+
+            train_loader, val_loader, test_loader = load_dataloaders_from_disk(save_dir, batch_size)
+            return train_loader, val_loader, test_loader
+            
+            # batch_size = 32  # o il valore che preferisci
+            # train_loader, val_loader, test_loader = load_dataloaders_from_disk("./saved_loaders_esc50", batch_size)
+
+            # return hf_ds, hf_test_ds
         
-        # batch_size = 32  # o il valore che preferisci
-        # train_loader, val_loader, test_loader = load_dataloaders_from_disk("./saved_loaders_esc50", batch_size)
 
-        # return hf_ds, hf_test_ds
-    
+        dataset = ESC50Dataset(audio_dir, meta_file)
 
-    dataset = ESC50Dataset(audio_dir, meta_file)
+        print(f"Dataset caricato: {len(dataset)} esempi totali.")
+        print(f"Batch size: {batch_size}")
+        
+        # Usa i fold per la suddivisione: fold 1-4 -> train/val, fold 5 -> test
+        train_val_df = dataset.df[dataset.df['fold'] != 5].reset_index(drop=True)
+        test_df = dataset.df[dataset.df['fold'] == 5].reset_index(drop=True)
+        
+        print(f"Esempi Train+Val (fold 1-4): {len(train_val_df)}\n {train_val_df}")
+        print(f"Esempi Test (fold 5): {len(test_df)}")
+        
 
-    print(f"Dataset caricato: {len(dataset)} esempi totali.")
-    print(f"Batch size: {batch_size}")
-    
-    # Usa i fold per la suddivisione: fold 1-4 -> train/val, fold 5 -> test
-    train_val_df = dataset.df[dataset.df['fold'] != 5].reset_index(drop=True)
-    test_df = dataset.df[dataset.df['fold'] == 5].reset_index(drop=True)
-    
-    print(f"Esempi Train+Val (fold 1-4): {len(train_val_df)}\n {train_val_df}")
-    print(f"Esempi Test (fold 5): {len(test_df)}")
-    
-
-    # Crea direttamente i dataset senza duplicare
-    train_val_dataset = ESC50Dataset(audio_dir, df=train_val_df)
-    test_dataset = ESC50Dataset(audio_dir, df=test_df)
+        # Crea direttamente i dataset senza duplicare
+        train_val_dataset = ESC50Dataset(audio_dir, df=train_val_df)
+        test_dataset = ESC50Dataset(audio_dir, df=test_df)
 
 
-    # Split train/val
-    indices = np.arange(len(train_val_dataset))
-    train_idx, val_idx = train_test_split(
-        indices,
-        test_size=0.2,
-        random_state=42,
-        stratify=train_val_dataset.df["target"]
-    )
+        # Split train/val
+        indices = np.arange(len(train_val_dataset))
+        train_idx, val_idx = train_test_split(
+            indices,
+            test_size=0.2,
+            random_state=42,
+            stratify=train_val_dataset.df["target"]
+        )
 
-    train_subset = torch.utils.data.Subset(train_val_dataset, train_idx)
-    val_subset = torch.utils.data.Subset(train_val_dataset, val_idx)
+        train_subset = torch.utils.data.Subset(train_val_dataset, train_idx)
+        val_subset = torch.utils.data.Subset(train_val_dataset, val_idx)
 
-    train_loader = DataLoader(
-        train_subset, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_fn, num_workers=4
-    )
-    val_loader = DataLoader(
-        val_subset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn, num_workers=4
-    )
-    test_loader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn, num_workers=4
-    )
+        train_loader = DataLoader(
+            train_subset, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_fn, num_workers=4
+        )
+        val_loader = DataLoader(
+            val_subset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn, num_workers=4
+        )
+        test_loader = DataLoader(
+            test_dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn, num_workers=4
+        )
 
-    # Log dimensioni
-    print(f"Train loader: {len(train_loader.dataset)} examples")
-    print(f"Validation loader: {len(val_loader.dataset)} examples")
-    print(f"Test loader: {len(test_loader.dataset)} examples")
+        # Log dimensioni
+        print(f"Train loader: {len(train_loader.dataset)} examples")
+        print(f"Validation loader: {len(val_loader.dataset)} examples")
+        print(f"Test loader: {len(test_loader.dataset)} examples")
 
-    # Log un batch di esempio
-    try:
-        train_batch = next(iter(train_loader))
-        mel, mfcc, label = train_batch
-        print(f"Batch di esempio (Train): mel shape={mel.shape}, mfcc shape={mfcc.shape}, label shape={label.shape}")
-    except Exception as e:
-        print(f"Errore nel caricare un batch di esempio: {e}")
+        # Log un batch di esempio
+        try:
+            train_batch = next(iter(train_loader))
+            mel, mfcc, label = train_batch
+            print(f"Batch di esempio (Train): mel shape={mel.shape}, mfcc shape={mfcc.shape}, label shape={label.shape}")
+        except Exception as e:
+            print(f"Errore nel caricare un batch di esempio: {e}")
 
-    save_dataloaders(train_loader, val_loader, test_loader, save_dir=save_dir)
+        save_dataloaders(train_loader, val_loader, test_loader, save_dir=save_dir)
 
-    return train_loader, val_loader, test_loader
+        return train_loader, val_loader, test_loader
+
+    else:
+        print(f"Data augmentation attivata, caricamento dataset con augmentazioni...")
+
+        save_dir = Path("Datasets/ESC50/Dataloaders_augmented")
+        trainloader_path = Path(f"Datasets/ESC50/Dataloaders_augmented/trainloader.pt")
+        valloader_path = Path(f"Datasets/ESC50/Dataloaders_augmented/valloader.pt")
+        testloader_path = Path(f"Datasets/ESC50/Dataloaders_augmented/testloader.pt")
+
+        if trainloader_path.exists() and valloader_path.exists() and testloader_path.exists():
+            print(f"Dataloaders augmented trovati, uploading da disco...")
+
+            train_loader, val_loader, test_loader = load_dataloaders_from_disk(save_dir, batch_size)
+            return train_loader, val_loader, test_loader
+
+        # Carica meta
+        meta_df = pd.read_csv(meta_file)
+
+        print(f"Dataset caricato: {len(meta_df)} esempi totali.")
+        print(f"Batch size: {batch_size}")
+
+        # Split con folds
+        train_val_df = meta_df[meta_df['fold'] != 5].reset_index(drop=True)
+        test_df = meta_df[meta_df['fold'] == 5].reset_index(drop=True)
+
+        print(f"Esempi Train+Val (fold 1-4): {len(train_val_df)}")
+        print(f"Esempi Test (fold 5): {len(test_df)}")
+
+        # Suddivisione stratificata train/val
+        indices = np.arange(len(train_val_df))
+        train_idx, val_idx = train_test_split(
+            indices,
+            test_size=0.2,
+            random_state=42,
+            stratify=train_val_df["target"]
+        )
+
+        train_df = train_val_df.iloc[train_idx].reset_index(drop=True)
+        val_df = train_val_df.iloc[val_idx].reset_index(drop=True)
+
+        # Dataset con augmentation sul train
+        train_dataset = ESC50DatasetAug(audio_dir, df=train_df, augment=True)
+        val_dataset = ESC50DatasetAug(audio_dir, df=val_df, augment=False)
+        test_dataset = ESC50DatasetAug(audio_dir, df=test_df, augment=False)
+
+        # DataLoader
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=True,
+            collate_fn=custom_collate_fn, num_workers=4
+        )
+        val_loader = DataLoader(
+            val_dataset, batch_size=batch_size, shuffle=False,
+            collate_fn=custom_collate_fn, num_workers=4
+        )
+        test_loader = DataLoader(
+            test_dataset, batch_size=batch_size, shuffle=False,
+            collate_fn=custom_collate_fn, num_workers=4
+        )
+
+        # Log dimensioni
+        print(f"Train loader: {len(train_loader.dataset)} examples")
+        print(f"Validation loader: {len(val_loader.dataset)} examples")
+        print(f"Test loader: {len(test_loader.dataset)} examples")
+
+        # Log un batch di esempio
+        try:
+            train_batch = next(iter(train_loader))
+            mel, mfcc, label = train_batch
+            print(f"Batch di esempio (Train): mel shape={mel.shape}, mfcc shape={mfcc.shape}, label shape={label.shape}")
+        except Exception as e:
+            print(f"Errore nel caricare un batch di esempio: {e}")
+
+        # Salvataggio dataloader pronti
+        save_dataloaders(train_loader, val_loader, test_loader, save_dir=save_dir)
+
+        return train_loader, val_loader, test_loader

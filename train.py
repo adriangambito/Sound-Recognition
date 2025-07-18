@@ -7,7 +7,9 @@ from tqdm import tqdm
 
 # Funzione di training
 def train_epoch(model, loader, criterion, optimizer, scheduler, device, epoch, total_epochs):
+    model.to(device)
     model.train()
+
     running_loss = 0.0
     correct = 0
     total = 0
@@ -59,6 +61,7 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, device, epoch, t
 #     accuracy = 100 * correct / total
 #     return avg_loss, accuracy
 def validate(model, loader, criterion, device):
+    model.to(device)
     model.eval()
     running_loss = 0.0
     correct = 0

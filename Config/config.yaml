@@ -1,0 +1,10 @@
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+data_augmentation: False

@@ -1,0 +1,419 @@
+Adam
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 4
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3209, Accuracy: 91.72%
+Val Loss:   1.4475, Accuracy: 61.25%
+Test Loss: 2.1089, Accuracy: 48.75%
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 4
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3212, Accuracy: 91.80%
+Val Loss:   1.3167, Accuracy: 64.69%
+Test Loss: 1.8717, Accuracy: 53.25%
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 4
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3634, Accuracy: 90.94%
+Val Loss:   1.3688, Accuracy: 64.69%
+Test Loss: 1.8113, Accuracy: 52.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3837, Accuracy: 88.83%  
+Val Loss:   1.4412, Accuracy: 63.75%
+Test Loss: 2.1008, Accuracy: 48.50%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.2658, Accuracy: 93.28%
+Val Loss:   1.3064, Accuracy: 65.31%
+Test Loss: 1.8221, Accuracy: 52.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3611, Accuracy: 91.02%
+Val Loss:   1.3463, Accuracy: 64.38%
+Test Loss: 1.7448, Accuracy: 54.50%
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3177, Accuracy: 90.78%
+Val Loss:   1.4551, Accuracy: 63.44%
+Test Loss: 2.0420, Accuracy: 52.50%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.2710, Accuracy: 92.97%
+Val Loss:   1.3489, Accuracy: 61.88%
+Test Loss: 2.0292, Accuracy: 54.00%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "Adam"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3259, Accuracy: 92.11%
+Val Loss:   1.3624, Accuracy: 64.69%
+Test Loss: 1.8713, Accuracy: 54.00%
+
+
+
+
+
+
+
+
+
+
+AdamW
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 4
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3360, Accuracy: 90.00%
+Val Loss:   1.4799, Accuracy: 59.38%
+Test Loss: 2.1823, Accuracy: 50.50%
+
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 4
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3045, Accuracy: 91.95%
+Val Loss:   1.3376, Accuracy: 66.88%
+Test Loss: 1.8783, Accuracy: 53.50%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 4
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3641, Accuracy: 91.09%
+Val Loss:   1.3618, Accuracy: 63.75%
+Test Loss: 1.8290, Accuracy: 53.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3921, Accuracy: 88.52%
+Val Loss:   1.3471, Accuracy: 65.62%
+Test Loss: 2.1403, Accuracy: 49.75%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.2727, Accuracy: 92.73%
+Val Loss:   1.2867, Accuracy: 65.00%
+Test Loss: 1.7869, Accuracy: 53.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3664, Accuracy: 90.78%
+Val Loss:   1.3234, Accuracy: 64.69%
+Test Loss: 1.7614, Accuracy: 54.75%
+
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3478, Accuracy: 89.69%
+Val Loss:   1.4299, Accuracy: 63.75%
+Test Loss: 2.1992, Accuracy: 52.75%
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.2847, Accuracy: 91.95%
+Val Loss:   1.3751, Accuracy: 61.56%
+Test Loss: 2.0060, Accuracy: 54.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "AdamW"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+
+Train Loss: 0.3484, Accuracy: 91.09%
+Val Loss:   1.4056, Accuracy: 63.44%
+Test Loss: 1.8710, Accuracy: 55.50%
+
+
+
+
+
+
+
+SGD
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 4
+stride: 2
+n_blocks: 3 
+
+Train Loss: 3.1022, Accuracy: 20.47%
+Val Loss:   3.0732, Accuracy: 26.25%
+Test Loss: 3.1227, Accuracy: 25.00%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 4
+stride: 2
+n_blocks: 3 
+
+Train Loss: 3.4609, Accuracy: 11.72%
+Val Loss:   3.4584, Accuracy: 17.81%
+Test Loss: 3.4881, Accuracy: 15.75%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 4
+stride: 2
+n_blocks: 3
+
+Train Loss: 3.6838, Accuracy: 7.73%
+Val Loss:   3.6821, Accuracy: 9.38%
+Test Loss: 3.7002, Accuracy: 10.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 3.0450, Accuracy: 20.55%
+Val Loss:   3.0491, Accuracy: 26.25%
+Test Loss: 3.0945, Accuracy: 27.50%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 3.4852, Accuracy: 14.30%
+Val Loss:   3.4645, Accuracy: 16.88%
+Test Loss: 3.4869, Accuracy: 19.50%
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 5
+stride: 2
+n_blocks: 3 
+
+Train Loss: 3.6979, Accuracy: 8.75%
+Val Loss:   3.6931, Accuracy: 10.00%
+Test Loss: 3.7017, Accuracy: 10.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 16
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+
+Train Loss: 2.9864, Accuracy: 21.80%
+Val Loss:   3.0103, Accuracy: 25.31%
+Test Loss: 3.0235, Accuracy: 26.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 32
+kernel_size: 7
+stride: 2
+n_blocks: 3
+
+Train Loss: 3.4289, Accuracy: 15.47%
+Val Loss:   3.4503, Accuracy: 20.62%
+Test Loss: 3.4423, Accuracy: 20.25%
+
+
+learning_rate: 0.001
+epochs: 30
+optimizer: "SGD"         # o "sgd", "rmsprop", ecc.
+dropout: 0.2
+input_size: 128           # dimensione input mel/mfcc
+batch_size: 64
+kernel_size: 7
+stride: 2
+n_blocks: 3 
+
+Train Loss: 3.6786, Accuracy: 9.92%
+Val Loss:   3.6903, Accuracy: 12.19%
+Test Loss: 3.6848, Accuracy: 11.75%
