@@ -103,7 +103,7 @@ def run_train(gui_ref):
     elif optimizer_name == "SGD":
         optimizer = optim.SGD(model.parameters(), lr=lr)
     elif optimizer_name == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=lr)
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     else:
         print("Error, strategy not available")
 
