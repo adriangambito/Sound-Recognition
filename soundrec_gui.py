@@ -14,7 +14,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from train import train_epoch, validate, validate
+from train import train_epoch, validate, validate, EarlyStopping
 from ESC50Dataset import prepare_esc50_loaders
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -42,6 +42,7 @@ def run_train(gui_ref):
         kernel_size = int(gui_ref.kernel_size.text())
         stride = int(gui_ref.stride.text())
         n_blocks = int(gui_ref.n_blocks.text())
+        
     except ValueError:
         gui_ref.log("Invalid hyperparameters.")
         return
@@ -53,6 +54,7 @@ def run_train(gui_ref):
     #model = SoundCNN(dropout).to(device)
     if gui_ref._loaded_model == True:
         selected_model = gui_ref.model_selector.currentText()
+
         gui_ref.log(f"Selected model: {selected_model}")
         checkpoint_path = os.path.join("Checkpoints", selected_model)
         if not os.path.exists(checkpoint_path):
@@ -124,16 +126,20 @@ def run_train(gui_ref):
     gui_ref.vall_losses.clear()
     gui_ref.vall_accuracies.clear()
 
-
     best_val_acc = 0.0
+    early_stopping = EarlyStopping(patience=0.5)  # Add patience as needed
+    best_model_state = None
 
     for epoch in range(epochs):
         if gui_ref.stop_requested:
             gui_ref.log(f"Training stopped at epoch {epoch+1}.")
             break
+
+        # Train and validate
         train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch, epochs)
         val_loss, val_acc = validate(model, val_loader, criterion, device)
 
+        # Log progress
         gui_ref.log(f"Epoch {epoch+1}/{epochs}")
         gui_ref.log(f"  Train Loss: {train_loss:.4f}, Accuracy: {train_acc:.2f}%")
         gui_ref.log(f"  Val Loss:   {val_loss:.4f}, Accuracy: {val_acc:.2f}%")
@@ -141,16 +147,29 @@ def run_train(gui_ref):
         # Update plot
         gui_ref.update_signal.emit(epoch + 1, epochs, train_loss, train_acc, val_loss, val_acc)
 
-        # if save_best_path and val_acc > best_val_acc:
-        #     best_val_acc = val_acc
-        #     torch.save(model.state_dict(), save_best_path)
-        #     gui_ref.log(f"Saved best model with val accuracy {val_acc:.2f}%")
+        # Early stopping check
+        early_stopping(val_loss)
+        if early_stopping.early_stop:
+            gui_ref.log(f"Early stopping triggered at epoch {epoch+1}")
+            break
+
+        # Save best model based on validation loss
+        if best_model_state is None or val_loss < early_stopping.best_loss:
+            best_model_state = model.state_dict()
+            best_val_acc = val_acc  # Optional, if you also want to track best accuracy
+            # Optionally save to disk:
+            # torch.save(best_model_state, save_best_path)
+            # gui_ref.log(f"Saved best model at epoch {epoch+1} with val accuracy {val_acc:.2f}%")
+
+    # Load best model before finishing
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
 
     gui_ref._trained_model = model
     gui_ref.check_save_model = True
     gui_ref.log("Training completed.")
 
-    # Valutazione finale sul test set
+    # Final test evaluation
     gui_ref.log("Final test of the model.")
     test_loss, test_acc = validate(model, test_loader, criterion, device)
     gui_ref.log(f"Test Loss: {test_loss:.4f}, Accuracy: {test_acc:.2f}%")
@@ -180,6 +199,7 @@ class TrainingGUI(QWidget):
         self.check_save_model = False
         self._trained_model = None
         self._loaded_model = False
+        self.samples_per_class = None
 
         self.init_ui()
         self.update_signal.connect(self.update_plot)
@@ -202,9 +222,10 @@ class TrainingGUI(QWidget):
         self.optimizer_combo = QComboBox()
         self.optimizer_combo.addItems(["AdamW", "SGD", "Adam"])
         self.input_size = QLineEdit("128")
-        self.kernel_size = QLineEdit("5")
-        self.stride = QLineEdit("1")
-        self.n_blocks = QLineEdit("3")
+        self.kernel_size = QLineEdit("7")
+        self.stride = QLineEdit("2")
+        self.n_blocks = QLineEdit("2")
+        self.samples_per_class = QLineEdit("40")  # New field for samples per class
 
         grid_layout.addWidget(QLabel("Learning Rate:"), 0, 0)
         grid_layout.addWidget(self.learning_rate_input, 0, 1)
@@ -223,8 +244,10 @@ class TrainingGUI(QWidget):
         grid_layout.addWidget(self.kernel_size, 1, 3)
         grid_layout.addWidget(QLabel("Stride:"), 2, 2)
         grid_layout.addWidget(self.stride, 2, 3)
-        grid_layout.addWidget(QLabel("Number of Blocks:"), 3, 2)
-        grid_layout.addWidget(self.n_blocks, 3, 3)
+        grid_layout.addWidget(QLabel("CNN Blocks:"), 3, 2)
+        grid_layout.addWidget(self.n_blocks, 3, 3)        
+        grid_layout.addWidget(QLabel("Samples per Class:"), 4, 2)
+        grid_layout.addWidget(self.samples_per_class, 4, 3)
 
         hyper_params_group.setLayout(grid_layout)
         layout.addWidget(hyper_params_group)
@@ -265,6 +288,7 @@ class TrainingGUI(QWidget):
         self.start_btn.clicked.connect(self.start_training)
         self.stop_btn.clicked.connect(self.stop_training)
         self.reset_btn.clicked.connect(self.reset)
+
 
         # ------------------------- Layout Assembly -------------------------
 
@@ -338,7 +362,7 @@ class TrainingGUI(QWidget):
             # Preprocessing: chiama la funzione per preparare i DataLoader
             try:
                 self.train_loader, self.val_loader, self.test_loader = prepare_esc50_loaders(
-                    self.dataset_dir, self.meta_file, batch_size
+                    self.dataset_dir, self.meta_file, batch_size, data_augmentation=True, samples_per_class=int(self.samples_per_class.text())
                 )
                 self.log(f"Dataset preprocessing completed.")
             except Exception as e:
