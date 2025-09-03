@@ -259,6 +259,8 @@ class SoundCNN_MFCCConcat(nn.Module):
         # Flattened size of CNN output
         self.flatten_dim = out_channels * size * size
 
+        print("CNN output size:", self.flatten_dim)
+
         # Combine CNN output + MFCC features
         self.fc = nn.Sequential(
             nn.Linear(self.flatten_dim + mfcc_feature_size, 128),

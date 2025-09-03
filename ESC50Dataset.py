@@ -41,15 +41,20 @@ class ESC50Dataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        file_name = row['filename']
         label_idx = row['target']
-        audio_path = os.path.join(self.audio_dir, file_name)
+        
+        # Ottieni il path del file audio e l'ID di replica
+        audio_path, replica_id = self._get_audio_path_and_augment_id(idx)
 
-        # Se augmentation è richiesta, applica le trasformazioni audio
-        if self.augment:
+        # Se augmentation è richiesta o è una replica, applica le trasformazioni audio
+        if self.augment or replica_id > 0:
             y, sr = librosa.load(audio_path, sr=44100)
-            y = self._random_augment(y, sr)
-            # Salva temporaneamente per elaborazione
+            # Per le repliche, usa augmentation deterministica basata su replica_id
+            if replica_id > 0:
+                y = self._deterministic_augment(y, sr, replica_id)
+            elif self.augment:  # Solo se augment=True e non è una replica
+                y = self._random_augment(y, sr)
+            # Calcola features dall'audio modificato
             mel_spec = self._compute_mel_from_audio(y, sr)
             mfcc = self._compute_mfcc_from_audio(y, sr)
         else:
@@ -90,17 +95,17 @@ class ESC50Dataset(Dataset):
                 if extra_samples > 0:
                     replicated_dfs.append(class_df.head(extra_samples))
                 
-                # Aggiungi un suffisso per distinguere le repliche
+                # CORREZIONE: Mantieni il filename originale, aggiungi solo metadati
                 combined_df = pd.concat(replicated_dfs, ignore_index=True)
                 for i in range(len(combined_df)):
                     if i >= current_samples:  # Solo per le repliche
                         replica_num = i // current_samples
-                        original_filename = combined_df.loc[i, 'filename']
-                        # Mantieni l'estensione ma aggiungi il suffisso
-                        name, ext = os.path.splitext(original_filename)
-                        combined_df.loc[i, 'filename'] = f"{name}_rep{replica_num}{ext}"
+                        # Mantieni il filename originale, aggiungi solo metadati
                         combined_df.loc[i, 'replica_id'] = replica_num
-                        combined_df.loc[i, 'original_filename'] = original_filename
+                        combined_df.loc[i, 'is_replica'] = True
+                    else:
+                        combined_df.loc[i, 'replica_id'] = 0
+                        combined_df.loc[i, 'is_replica'] = False
                 
                 expanded_dfs.append(combined_df)
             
@@ -111,20 +116,80 @@ class ESC50Dataset(Dataset):
     def _get_audio_path_and_augment_id(self, idx):
         """
         Restituisce il path dell'audio e l'ID di augmentation da applicare.
-        Se è una replica, usa il file originale ma con augmentation diversa.
+        Per le repliche, usa sempre il file originale ma con augmentation diversa.
         """
         row = self.df.iloc[idx]
-        
-        # Se è una replica, usa il file originale
-        if 'original_filename' in row and pd.notna(row['original_filename']):
-            filename = row['original_filename']
-            replica_id = int(row.get('replica_id', 0))
-        else:
-            filename = row['filename']
-            replica_id = 0
-            
+        filename = row['filename']  # Usa sempre il filename originale
+        replica_id = int(row.get('replica_id', 0))
         audio_path = os.path.join(self.audio_dir, filename)
         return audio_path, replica_id
+
+    def _deterministic_augment_old(self, y, sr, replica_id):
+        """
+        Applica augmentation deterministica basata su replica_id.
+        Questo assicura che ogni replica abbia una trasformazione diversa ma riproducibile.
+        """
+        augmentations = [
+            ('noise', lambda y, sr: self._add_noise(y, noise_factor=0.05)),
+            ('stretch_slow', lambda y, sr: self._stretch_time(y, rate=0.9)),
+            ('stretch_fast', lambda y, sr: self._stretch_time(y, rate=1.1)),
+            ('pitch_down', lambda y, sr: self._pitch_shift(y, sr, n_steps=-2)),
+            ('pitch_up', lambda y, sr: self._pitch_shift(y, sr, n_steps=2)),
+            ('noise_strong', lambda y, sr: self._add_noise(y, noise_factor=0.01)),
+            ('stretch_very_slow', lambda y, sr: self._stretch_time(y, rate=0.85)),
+            ('stretch_very_fast', lambda y, sr: self._stretch_time(y, rate=1.15)),
+        ]
+        
+        # Seleziona augmentation basata su replica_id
+        aug_name, aug_func = augmentations[(replica_id - 1) % len(augmentations)]
+        try:
+            return aug_func(y, sr)
+        except Exception as e:
+            print(f"Errore in augmentation {aug_name} per replica {replica_id}: {e}")
+            return y
+    def _deterministic_augment(self, y, sr, replica_id):
+        """
+        Applica augmentation deterministica basata su replica_id.
+        Ogni replica ha una trasformazione diversa ma riproducibile.
+        """
+        augmentations = [
+            # Noise (random factor in range)
+            ('noise', lambda y, sr: self._add_noise(y, noise_factor=0.02)),
+            
+            # Pitch shift (up/down)
+            ('pitch_down', lambda y, sr: self._pitch_shift(y, sr, n_steps=-2)),
+            ('pitch_up', lambda y, sr: self._pitch_shift(y, sr, n_steps=2)),
+
+            # Time stretch (slow/fast)
+            ('stretch_slow', lambda y, sr: self._stretch_time(y, rate=0.9)),
+            ('stretch_fast', lambda y, sr: self._stretch_time(y, rate=1.1)),
+            ('stretch_very_slow', lambda y, sr: self._stretch_time(y, rate=0.85)),
+            ('stretch_very_fast', lambda y, sr: self._stretch_time(y, rate=1.15)),
+
+            # Gain (volume scaling)
+            ('gain', lambda y, sr: y * 1.2),
+            ('attenuate', lambda y, sr: y * 0.8),
+
+            # Time shift (circular roll)
+            ('shift_forward', lambda y, sr: np.roll(y, int(0.1 * sr))),
+            ('shift_backward', lambda y, sr: np.roll(y, -int(0.1 * sr))),
+
+            # Filtering
+            ('lowpass', lambda y, sr: self._apply_filter(y, sr, 'lowpass')),
+            ('highpass', lambda y, sr: self._apply_filter(y, sr, 'highpass')),
+
+            # Reverb / echo
+            ('reverb', lambda y, sr: self._add_reverb(y, sr)),
+        ]
+        
+        # Seleziona augmentation basata su replica_id
+        aug_name, aug_func = augmentations[(replica_id - 1) % len(augmentations)]
+        try:
+            return aug_func(y, sr)
+        except Exception as e:
+            print(f"Errore in augmentation {aug_name} per replica {replica_id}: {e}")
+            return y
+
     
     def _random_augment(self, y, sr):
         """Applica una trasformazione casuale al segnale audio"""
@@ -132,7 +197,7 @@ class ESC50Dataset(Dataset):
         if aug_choice == 'noise':
             return self._add_noise(y)
         elif aug_choice == 'stretch':
-            rate = np.random.uniform(0.9, 1.1)
+            rate = np.random.uniform(0.8, 1.2)
             return self._stretch_time(y, rate)
         elif aug_choice == 'pitch':
             steps = np.random.uniform(-2, 2)
@@ -140,7 +205,7 @@ class ESC50Dataset(Dataset):
         else:
             return y
 
-    def _add_noise(self, y, noise_factor=0.005):
+    def _add_noise(self, y, noise_factor=0.05):
         noise = np.random.randn(len(y))
         return y + noise_factor * noise
 
@@ -149,7 +214,6 @@ class ESC50Dataset(Dataset):
 
     def _pitch_shift(self, y, sr, n_steps=2):
         return librosa.effects.pitch_shift(y=y, sr=sr, n_steps=n_steps)
-
 
     def _compute_mel_from_audio(self, y, sr, n_mels=N_MELS):
         """Calcola mel spectrogram da array audio"""
@@ -326,15 +390,15 @@ def prepare_esc50_loaders(audio_dir, meta_file, batch_size, data_augmentation=Fa
     # Crea dataloader
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True,
-        collate_fn=custom_collate_fn, num_workers=4
+        collate_fn=custom_collate_fn, num_workers=2
     )
     val_loader = DataLoader(
         val_dataset, batch_size=batch_size, shuffle=False,
-        collate_fn=custom_collate_fn, num_workers=4
+        collate_fn=custom_collate_fn, num_workers=2
     )
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False,
-        collate_fn=custom_collate_fn, num_workers=4
+        collate_fn=custom_collate_fn, num_workers=2
     )
 
     # Log dimensioni finali

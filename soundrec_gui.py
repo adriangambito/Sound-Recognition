@@ -127,7 +127,7 @@ def run_train(gui_ref):
     gui_ref.vall_accuracies.clear()
 
     best_val_acc = 0.0
-    early_stopping = EarlyStopping(patience=0.5)  # Add patience as needed
+    early_stopping = EarlyStopping(patience=5)  # Add patience as needed
     best_model_state = None
 
     for epoch in range(epochs):
@@ -233,7 +233,7 @@ class TrainingGUI(QWidget):
         grid_layout.addWidget(self.batch_size_input, 1, 1)
         grid_layout.addWidget(QLabel("Optimizer:"), 2, 0)
         grid_layout.addWidget(self.optimizer_combo, 2, 1)
-        grid_layout.addWidget(QLabel("Epochs:"), 3, 0)
+        grid_layout.addWidget(QLabel("Max Epochs:"), 3, 0)
         grid_layout.addWidget(self.epochs_input, 3, 1)
         grid_layout.addWidget(QLabel("Dropout:"), 4, 0)
         grid_layout.addWidget(self.dropout, 4, 1)
