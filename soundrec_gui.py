@@ -216,7 +216,7 @@ class TrainingGUI(QWidget):
         grid_layout = QGridLayout()
 
         self.learning_rate_input = QLineEdit("0.001")
-        self.batch_size_input = QLineEdit("32")
+        self.batch_size_input = QLineEdit("64")
         self.epochs_input = QLineEdit("30")
         self.dropout = QLineEdit("0.2")
         self.optimizer_combo = QComboBox()
@@ -224,7 +224,7 @@ class TrainingGUI(QWidget):
         self.input_size = QLineEdit("128")
         self.kernel_size = QLineEdit("7")
         self.stride = QLineEdit("2")
-        self.n_blocks = QLineEdit("2")
+        self.n_blocks = QLineEdit("3")
         self.samples_per_class = QLineEdit("40")  # New field for samples per class
 
         grid_layout.addWidget(QLabel("Learning Rate:"), 0, 0)

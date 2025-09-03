@@ -166,20 +166,20 @@ class ESC50Dataset(Dataset):
             ('stretch_very_slow', lambda y, sr: self._stretch_time(y, rate=0.85)),
             ('stretch_very_fast', lambda y, sr: self._stretch_time(y, rate=1.15)),
 
-            # Gain (volume scaling)
-            ('gain', lambda y, sr: y * 1.2),
-            ('attenuate', lambda y, sr: y * 0.8),
+            # # Gain (volume scaling)
+            # ('gain', lambda y, sr: y * 1.2),
+            # ('attenuate', lambda y, sr: y * 0.8),
 
-            # Time shift (circular roll)
-            ('shift_forward', lambda y, sr: np.roll(y, int(0.1 * sr))),
-            ('shift_backward', lambda y, sr: np.roll(y, -int(0.1 * sr))),
+            # # Time shift (circular roll)
+            # ('shift_forward', lambda y, sr: np.roll(y, int(0.1 * sr))),
+            # ('shift_backward', lambda y, sr: np.roll(y, -int(0.1 * sr))),
 
-            # Filtering
-            ('lowpass', lambda y, sr: self._apply_filter(y, sr, 'lowpass')),
-            ('highpass', lambda y, sr: self._apply_filter(y, sr, 'highpass')),
+            # # Filtering
+            # ('lowpass', lambda y, sr: self._apply_filter(y, sr, 'lowpass')),
+            # ('highpass', lambda y, sr: self._apply_filter(y, sr, 'highpass')),
 
-            # Reverb / echo
-            ('reverb', lambda y, sr: self._add_reverb(y, sr)),
+            # # Reverb / echo
+            # ('reverb', lambda y, sr: self._add_reverb(y, sr)),
         ]
         
         # Seleziona augmentation basata su replica_id
